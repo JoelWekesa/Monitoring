@@ -1,0 +1,118 @@
+volumes:
+ prometheus-data:
+  driver: local
+ grafana-data:
+  driver: local
+
+networks:
+ monitoring_net:
+  driver: bridge
+
+services:
+ prometheus:
+  image: docker.io/prom/prometheus:v3.1.0
+  container_name: prometheus
+  ports:
+   - 9090:9090
+  command: '--config.file=/etc/prometheus/prometheus.yaml'
+  volumes:
+   - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+   - prometheus-data:/prometheus
+
+  networks:
+   - monitoring_net
+  restart: unless-stopped
+ grafana:
+  image: docker.io/grafana/grafana-oss:11.4.0
+  container_name: grafana
+  ports:
+   - '3000:3000'
+  volumes:
+   - grafana-data:/var/lib/grafana
+   - ./grafana/provisioning:/etc/grafana/provisioning
+
+  networks:
+   - monitoring_net
+  restart: unless-stopped
+
+ node_exporter:
+  image: quay.io/prometheus/node-exporter:latest
+  container_name: node_exporter
+  command:
+   - '--path.rootfs=/host'
+  restart: unless-stopped
+  volumes:
+   - './:/host:ro,rslave'
+
+  networks:
+   - monitoring_net
+
+ cadvisor:
+  image: gcr.io/cadvisor/cadvisor:v0.51.0
+  container_name: cadvisor
+  ports:
+   - 8080:8080
+  volumes:
+   - /:/rootfs:ro
+   - /run:/run:ro
+   - /sys:/sys:ro
+   - /var/lib/docker/:/var/lib/docker:ro
+   - /dev/disk/:/dev/disk:ro
+
+  networks:
+   - monitoring_net
+  devices:
+   - /dev/kmsg
+  privileged: true
+  restart: unless-stopped
+
+ blackbox:
+  image: prom/blackbox-exporter:v0.25.0
+  container_name: blackbox
+  ports:
+   - '9115:9115'
+  volumes:
+   - ./blackbox/blackbox.yaml:/etc/blackbox/blackbox.yaml
+
+  networks:
+   - monitoring_net
+  command:
+   - --config.file=/etc/blackbox/blackbox.yaml
+  restart: unless-stopped
+
+ loki:
+  container_name: loki
+  image: grafana/loki:2.9.2
+  ports:
+   - '3100:3100'
+  volumes:
+   - ./loki/loki.yaml:/etc/loki/local-config.yml
+  command:
+   - --config.file=/etc/loki/local-config.yml
+  networks:
+   - monitoring_net
+
+ otel-collector:
+  container_name: otel-collector
+  image: otel/opentelemetry-collector:0.118.0
+  restart: always
+  command: ['--config=/etc/otel-collector-config.yml']
+  volumes:
+   - ./otel/otel.yaml:/etc/otel-collector-config.yml
+  ports:
+   - '4317:4317' # OTLP gRPC receiver
+   - '4318:4318' # OTLP HTTP receiver
+   - '8888:8888' # Prometheus metrics exposed by collector
+   - '8889:8889' # Prometheus exporter metrics
+   - '13133:13133' # Health check extension
+   - '55679:55679' # zPages extension
+  networks:
+   - monitoring_net
+
+ zipkin:
+  container_name: zipkin
+  image: openzipkin/zipkin:latest
+  ports:
+   - '9411:9411'
+  networks:
+   - monitoring_net

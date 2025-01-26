@@ -1,0 +1,9 @@
+{
+	"blackbox_urls": [
+		"https://www.google.com",
+		"https://estore.africa",
+		"https://www.facebook.com",
+		"host.docker.internal:3001",
+		"host.docker.internal:5001"
+	]
+}
